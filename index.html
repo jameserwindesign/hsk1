@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f4ede1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>HSK 1 — Vocabulary by Category</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="topnav-mount"></div>
+
+<header class="page-header">
+  <h1>Vocabulary <span class="cn">词汇表</span></h1>
+</header>
+
+<nav class="toc" aria-label="Table of contents" id="toc"></nav>
+
+<main id="main"></main>
+
+<footer>HSK 1 · 300 Words · Organized by Category</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7/dist/hanzi-writer.min.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  const toc = document.getElementById('toc');
+  const main = document.getElementById('main');
+
+  // Build TOC
+  toc.innerHTML = `
+    <div class="toc-grid">
+      ${categories.map(c => `
+        <a href="#${c.id}">
+          <span>${c.name}</span>
+          <span class="num">${c.words.length}</span>
+        </a>
+      `).join('')}
+    </div>
+  `;
+
+  // Build categories
+  main.innerHTML = categories.map((c, i) => `
+    <section class="category" id="${c.id}">
+      <div class="cat-header">
+        <span class="cat-number">${String(i + 1).padStart(2, '0')}</span>
+        <h2 class="cat-title">${c.name}</h2>
+        <span class="cat-count">${c.words.length} words</span>
+      </div>
+      <div class="word-grid">
+        ${c.words.map(w => `
+          <div class="word" data-hanzi="${w.hanzi}" data-pinyin="${w.pinyin}" data-gloss="${w.gloss.replace(/"/g, '&quot;')}">
+            <div class="pinyin">${w.pinyin}</div>
+            <div class="hanzi">${w.hanzi}</div>
+            <div class="gloss">${w.gloss}</div>
+          </div>
+        `).join('')}
+      </div>
+    </section>
+  `).join('');
+
+  // Wire up word clicks
+  main.addEventListener('click', e => {
+    const card = e.target.closest('.word');
+    if (!card) return;
+    openModalForHanzi(card.dataset.hanzi, card.dataset.pinyin, card.dataset.gloss);
+  });
+})();
+</script>
+
+</body>
+</html>

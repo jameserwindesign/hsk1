@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f4ede1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>HSK 1 — Flashcards</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="topnav-mount"></div>
+
+<header class="page-header">
+  <h1>Flashcards <span class="cn">抽认卡</span></h1>
+</header>
+
+<!-- ===== SETUP ===== -->
+<section class="setup-panel" id="setup">
+
+  <div class="setup-group">
+    <div class="setup-label">Mode</div>
+    <div class="option-grid" data-group="mode">
+      <button class="option-card selected" data-value="flip">
+        <div class="option-title">Classic flip</div>
+        <div class="option-desc">Tap to reveal. Self-grade. No tracking.</div>
+      </button>
+      <button class="option-card" data-value="srs">
+        <div class="option-title">Spaced repetition</div>
+        <div class="option-desc">Anki-style. Cards return based on how well you knew them.</div>
+      </button>
+      <button class="option-card" data-value="mcq">
+        <div class="option-title">Multiple choice</div>
+        <div class="option-desc">Four options, instant feedback, score at the end.</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="setup-group">
+    <div class="setup-label">Direction</div>
+    <div class="option-grid" data-group="direction">
+      <button class="option-card selected" data-value="hanzi-en">
+        <div class="option-title">汉字 → meaning</div>
+        <div class="option-desc">See the character, recall the English.</div>
+      </button>
+      <button class="option-card" data-value="hanzi-py">
+        <div class="option-title">汉字 → pinyin</div>
+        <div class="option-desc">See the character, recall the pronunciation.</div>
+      </button>
+      <button class="option-card" data-value="en-hanzi">
+        <div class="option-title">meaning → 汉字</div>
+        <div class="option-desc">See the English, recall the character.</div>
+      </button>
+      <button class="option-card" data-value="py-hanzi">
+        <div class="option-title">pinyin → 汉字</div>
+        <div class="option-desc">See the pinyin, recall the character.</div>
+      </button>
+      <button class="option-card" data-value="py-en">
+        <div class="option-title">pinyin → meaning</div>
+        <div class="option-desc">See the pinyin, recall the English.</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="setup-group">
+    <div class="setup-label">Deck</div>
+    <div class="option-grid" data-group="deck">
+      <button class="option-card selected" data-value="all">
+        <div class="option-title">All 300</div>
+        <div class="option-desc">The whole vocabulary list, shuffled.</div>
+      </button>
+      <button class="option-card" data-value="custom">
+        <div class="option-title">Custom</div>
+        <div class="option-desc">Pick any combination of categories.</div>
+      </button>
+      <button class="option-card" data-value="smart">
+        <div class="option-title">Smart</div>
+        <div class="option-desc">Words you've missed recently.</div>
+      </button>
+    </div>
+
+    <div class="category-checks" id="category-checks">
+      <!-- populated -->
+    </div>
+    <div class="cat-toggle-row" id="cat-toggle-row" style="display:none">
+      <button class="link-btn" data-cat-action="all">Select all</button>
+      <button class="link-btn" data-cat-action="none">Clear</button>
+    </div>
+  </div>
+
+  <div class="setup-summary" id="setup-summary"></div>
+
+  <div class="setup-actions">
+    <button class="btn btn-primary" id="start-btn">Start session</button>
+  </div>
+</section>
+
+<!-- ===== SESSION ===== -->
+<section class="session" id="session" style="display:none">
+  <div class="session-bar">
+    <span><span class="progress-text" id="progress-count">0</span> / <span id="progress-total">0</span></span>
+    <span id="session-meta"></span>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+
+  <div id="card-mount"></div>
+
+  <div class="session-actions">
+    <button class="btn btn-ghost" id="end-session">End session</button>
+    <span class="meta" id="card-info"></span>
+  </div>
+</section>
+
+<!-- ===== RESULTS ===== -->
+<section class="results" id="results" style="display:none">
+  <div class="results-headline">Session complete</div>
+  <div class="results-score" id="results-score"></div>
+  <div class="results-pct" id="results-pct"></div>
+  <div class="results-breakdown" id="results-breakdown"></div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="restart-btn">New session</button>
+    <a class="btn btn-ghost" href="progress.html">View progress</a>
+  </div>
+</section>
+
+<footer>HSK 1 · Flashcards</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7/dist/hanzi-writer.min.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  const state = {
+    mode: 'flip',           // flip | srs | mcq
+    direction: 'hanzi-en',  // hanzi-en | hanzi-py | en-hanzi
+    deck: 'all',            // all | custom | smart
+    customCats: new Set(),
+    cards: [],
+    idx: 0,
+    revealed: false,
+    sessionStats: { total: 0, correct: 0 },
+  };
+
+  const setupEl = document.getElementById('setup');
+  const sessionEl = document.getElementById('session');
+  const resultsEl = document.getElementById('results');
+  const catChecks = document.getElementById('category-checks');
+  const catToggleRow = document.getElementById('cat-toggle-row');
+  const summary = document.getElementById('setup-summary');
+  const startBtn = document.getElementById('start-btn');
+  const cardMount = document.getElementById('card-mount');
+  const progressCount = document.getElementById('progress-count');
+  const progressTotal = document.getElementById('progress-total');
+  const progressFill = document.getElementById('progress-fill');
+  const sessionMeta = document.getElementById('session-meta');
+  const cardInfo = document.getElementById('card-info');
+  const endBtn = document.getElementById('end-session');
+  const restartBtn = document.getElementById('restart-btn');
+
+  // ===== SETUP UI =====
+  // Render category checkboxes
+  catChecks.innerHTML = categories.map(c => `
+    <label>
+      <input type="checkbox" value="${c.id}" />
+      <span>${c.name}</span>
+      <span class="check-count">${c.words.length}</span>
+    </label>
+  `).join('');
+
+  // Option-card groups
+  document.querySelectorAll('.option-grid').forEach(grid => {
+    const group = grid.dataset.group;
+    grid.addEventListener('click', e => {
+      const btn = e.target.closest('.option-card');
+      if (!btn) return;
+      grid.querySelectorAll('.option-card').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      state[group] = btn.dataset.value;
+      onSetupChange();
+    });
+  });
+
+  // Category checkboxes
+  catChecks.addEventListener('change', e => {
+    if (e.target.matches('input[type="checkbox"]')) {
+      if (e.target.checked) state.customCats.add(e.target.value);
+      else state.customCats.delete(e.target.value);
+      onSetupChange();
+    }
+  });
+
+  catToggleRow.addEventListener('click', e => {
+    const a = e.target.getAttribute('data-cat-action');
+    if (!a) return;
+    const boxes = catChecks.querySelectorAll('input[type="checkbox"]');
+    if (a === 'all') {
+      boxes.forEach(b => { b.checked = true; state.customCats.add(b.value); });
+    } else if (a === 'none') {
+      boxes.forEach(b => { b.checked = false; });
+      state.customCats.clear();
+    }
+    onSetupChange();
+  });
+
+  function onSetupChange() {
+    const customMode = state.deck === 'custom';
+    catChecks.classList.toggle('visible', customMode);
+    catToggleRow.style.display = customMode ? 'flex' : 'none';
+
+    let deckSize = 0;
+    if (state.deck === 'all') deckSize = allWords.length;
+    else if (state.deck === 'custom') deckSize = buildDeckCustom([...state.customCats]).length;
+    else if (state.deck === 'smart') deckSize = buildDeckSmart().length;
+
+    const dirLabels = {
+      'hanzi-en': '汉字 → meaning',
+      'hanzi-py': '汉字 → pinyin',
+      'en-hanzi': 'meaning → 汉字',
+      'py-hanzi': 'pinyin → 汉字',
+      'py-en':    'pinyin → meaning',
+    };
+    const modeLabels = { flip: 'Classic flip', srs: 'Spaced repetition', mcq: 'Multiple choice' };
+
+    summary.innerHTML = `
+      <strong>${modeLabels[state.mode]}</strong> ·
+      <strong>${dirLabels[state.direction]}</strong> ·
+      <strong>${deckSize}</strong> card${deckSize === 1 ? '' : 's'}
+      ${state.deck === 'smart' && deckSize === 0 ? '<br><span style="color:var(--vermillion)">Smart deck is empty — quiz yourself first to populate it.</span>' : ''}
+    `;
+
+    startBtn.disabled = deckSize === 0;
+  }
+  onSetupChange();
+
+  // ===== START =====
+  startBtn.addEventListener('click', () => {
+    if (state.deck === 'all') state.cards = buildDeckAll();
+    else if (state.deck === 'custom') state.cards = buildDeckCustom([...state.customCats]);
+    else if (state.deck === 'smart') state.cards = buildDeckSmart();
+
+    if (state.mode === 'srs') {
+      // Sort by due-soonest, then unseen
+      state.cards.sort((a, b) => {
+        const ca = storage.getCard(a.hanzi);
+        const cb = storage.getCard(b.hanzi);
+        const da = ca ? ca.due : 0;
+        const db = cb ? cb.due : 0;
+        return da - db;
+      });
+    }
+
+    state.idx = 0;
+    state.revealed = false;
+    state.sessionStats = { total: 0, correct: 0 };
+
+    storage.startSession();
+    setupEl.style.display = 'none';
+    resultsEl.style.display = 'none';
+    sessionEl.style.display = 'block';
+
+    progressTotal.textContent = state.cards.length;
+    sessionMeta.textContent = state.mode.toUpperCase();
+    renderCard();
+  });
+
+  endBtn.addEventListener('click', finishSession);
+  restartBtn.addEventListener('click', () => {
+    setupEl.style.display = 'block';
+    sessionEl.style.display = 'none';
+    resultsEl.style.display = 'none';
+    onSetupChange();
+  });
+
+  // ===== CARD RENDER =====
+  function currentCard() { return state.cards[state.idx]; }
+
+  function renderCard() {
+    progressCount.textContent = state.idx;
+    progressFill.style.width = `${(state.idx / state.cards.length) * 100}%`;
+    cardInfo.textContent = '';
+
+    if (state.idx >= state.cards.length) {
+      finishSession();
+      return;
+    }
+
+    if (state.mode === 'flip') renderFlip();
+    else if (state.mode === 'srs') renderSRS();
+    else if (state.mode === 'mcq') renderMCQ();
+  }
+
+  // PROMPT / ANSWER content per direction
+  function promptHtml(word) {
+    if (state.direction === 'en-hanzi') {
+      return `<div class="card-meaning">${escapeHtml(word.gloss)}</div>`;
+    }
+    if (state.direction === 'py-hanzi' || state.direction === 'py-en') {
+      return `<div class="card-pinyin" style="font-size:2.2rem">${word.pinyin}</div>`;
+    }
+    // hanzi-en or hanzi-py: show hanzi
+    return `<div class="card-hanzi">${word.hanzi}</div>`;
+  }
+  function answerHtml(word) {
+    if (state.direction === 'hanzi-en') {
+      return `
+        <div class="card-pinyin">${word.pinyin}</div>
+        <div class="card-gloss">${escapeHtml(word.gloss)}</div>
+      `;
+    }
+    if (state.direction === 'hanzi-py') {
+      return `
+        <div class="card-pinyin" style="font-size:2rem">${word.pinyin}</div>
+        <div class="card-gloss">${escapeHtml(word.gloss)}</div>
+      `;
+    }
+    if (state.direction === 'py-hanzi') {
+      return `
+        <div class="card-hanzi">${word.hanzi}</div>
+        <div class="card-gloss">${escapeHtml(word.gloss)}</div>
+      `;
+    }
+    if (state.direction === 'py-en') {
+      return `
+        <div class="card-gloss" style="font-size:1.8rem">${escapeHtml(word.gloss)}</div>
+        <div class="card-hanzi" style="font-size:2.5rem;margin-top:.5rem">${word.hanzi}</div>
+      `;
+    }
+    // en-hanzi
+    return `
+      <div class="card-hanzi">${word.hanzi}</div>
+      <div class="card-pinyin">${word.pinyin}</div>
+    `;
+  }
+
+  // ===== FLIP MODE =====
+  function renderFlip() {
+    state.revealed = false;
+    const w = currentCard();
+    cardMount.innerHTML = `
+      <div class="card" id="flip-card">
+        <div class="card-prompt-label">${promptLabel()}</div>
+        <div id="flip-content">${promptHtml(w)}</div>
+        <div class="card-flip-hint">Tap to flip</div>
+      </div>
+      <div class="srs-controls" id="flip-actions" style="display:none">
+        <button class="srs-btn srs-again" data-flip-result="wrong">
+          <span>Didn't know</span>
+        </button>
+        <button class="srs-btn srs-good" data-flip-result="right" style="grid-column:span 3">
+          <span>Got it</span>
+        </button>
+      </div>
+    `;
+    const card = document.getElementById('flip-card');
+    card.addEventListener('click', () => {
+      if (state.revealed) return;
+      state.revealed = true;
+      const content = document.getElementById('flip-content');
+      content.innerHTML = `
+        ${promptHtml(w)}
+        <div class="card-divider"></div>
+        ${answerHtml(w)}
+      `;
+      card.querySelector('.card-flip-hint').remove();
+      card.classList.add('no-flip');
+      document.getElementById('flip-actions').style.display = 'grid';
+    });
+    document.getElementById('flip-actions').addEventListener('click', e => {
+      const btn = e.target.closest('[data-flip-result]');
+      if (!btn) return;
+      const correct = btn.dataset.flipResult === 'right';
+      storage.recordAnswer('flip', w.hanzi, correct);
+      state.sessionStats.total += 1;
+      if (correct) state.sessionStats.correct += 1;
+      next();
+    });
+  }
+
+  // ===== SRS MODE =====
+  function renderSRS() {
+    state.revealed = false;
+    const w = currentCard();
+    const prev = storage.getCard(w.hanzi);
+    cardMount.innerHTML = `
+      <div class="card" id="srs-card">
+        <div class="card-prompt-label">${promptLabel()}${prev ? ' · seen' : ' · new'}</div>
+        <div id="srs-content">${promptHtml(w)}</div>
+        <div class="card-flip-hint">Tap to reveal</div>
+      </div>
+      <div class="srs-controls" id="srs-actions" style="display:none">
+        <button class="srs-btn srs-again" data-q="1">
+          <span>Again</span><span class="srs-interval">${formatInterval(sm2PreviewInterval(prev, 1))}</span>
+        </button>
+        <button class="srs-btn srs-hard" data-q="3">
+          <span>Hard</span><span class="srs-interval">${formatInterval(sm2PreviewInterval(prev, 3))}</span>
+        </button>
+        <button class="srs-btn srs-good" data-q="4">
+          <span>Good</span><span class="srs-interval">${formatInterval(sm2PreviewInterval(prev, 4))}</span>
+        </button>
+        <button class="srs-btn srs-easy" data-q="5">
+          <span>Easy</span><span class="srs-interval">${formatInterval(sm2PreviewInterval(prev, 5))}</span>
+        </button>
+      </div>
+    `;
+    const card = document.getElementById('srs-card');
+    card.addEventListener('click', () => {
+      if (state.revealed) return;
+      state.revealed = true;
+      const content = document.getElementById('srs-content');
+      content.innerHTML = `
+        ${promptHtml(w)}
+        <div class="card-divider"></div>
+        ${answerHtml(w)}
+      `;
+      card.querySelector('.card-flip-hint').remove();
+      card.classList.add('no-flip');
+      document.getElementById('srs-actions').style.display = 'grid';
+    });
+    document.getElementById('srs-actions').addEventListener('click', e => {
+      const btn = e.target.closest('[data-q]');
+      if (!btn) return;
+      const q = parseInt(btn.dataset.q, 10);
+      const updated = sm2Update(prev, q);
+      storage.updateCard(w.hanzi, updated);
+      const correct = q >= 3;
+      storage.recordAnswer('srs', w.hanzi, correct);
+      state.sessionStats.total += 1;
+      if (correct) state.sessionStats.correct += 1;
+      next();
+    });
+  }
+
+  // ===== MCQ MODE =====
+  function renderMCQ() {
+    const w = currentCard();
+    const choices = buildMCQChoices(w);
+    const correctIdx = choices.indexOf(w);
+    cardMount.innerHTML = `
+      <div class="card no-flip">
+        <div class="card-prompt-label">${promptLabel()}</div>
+        ${promptHtml(w)}
+      </div>
+      <div class="mcq-options" id="mcq-options">
+        ${choices.map((c, i) => `
+          <button class="mcq-option" data-idx="${i}">
+            <span class="mcq-letter">${String.fromCharCode(65 + i)}</span>
+            ${mcqChoiceText(c)}
+          </button>
+        `).join('')}
+      </div>
+    `;
+    document.getElementById('mcq-options').addEventListener('click', e => {
+      const btn = e.target.closest('.mcq-option');
+      if (!btn || btn.disabled) return;
+      const picked = parseInt(btn.dataset.idx, 10);
+      const correct = picked === correctIdx;
+      document.querySelectorAll('.mcq-option').forEach((b, i) => {
+        b.disabled = true;
+        if (i === correctIdx) b.classList.add('correct');
+        else if (i === picked) b.classList.add('wrong');
+      });
+      storage.recordAnswer('mcq', w.hanzi, correct);
+      state.sessionStats.total += 1;
+      if (correct) state.sessionStats.correct += 1;
+      cardInfo.textContent = correct ? '✓ Correct — next in 0.8s' : '✗ Wrong — next in 1.4s';
+      setTimeout(next, correct ? 800 : 1400);
+    });
+  }
+
+  function buildMCQChoices(target) {
+    // Same direction; pull distractors from full pool.
+    const pool = allWords.filter(w => w.hanzi !== target.hanzi);
+    const distractors = shuffle(pool).slice(0, 3);
+    return shuffle([target, ...distractors]);
+  }
+  function mcqChoiceText(word) {
+    // Answer side determines what gets shown as the option
+    if (state.direction === 'hanzi-en' || state.direction === 'py-en') {
+      return `<span class="mcq-text-en">${escapeHtml(word.gloss)}</span>`;
+    }
+    if (state.direction === 'hanzi-py') {
+      return `<span class="mcq-text-py">${word.pinyin}</span>`;
+    }
+    // en-hanzi, py-hanzi
+    return `<span class="mcq-text-cn">${word.hanzi}</span>`;
+  }
+
+  function promptLabel() {
+    if (state.direction === 'en-hanzi') return 'meaning';
+    if (state.direction === 'py-hanzi' || state.direction === 'py-en') return 'pinyin';
+    return '汉字';
+  }
+
+  // ===== NAV =====
+  function next() {
+    state.idx += 1;
+    if (state.idx >= state.cards.length) finishSession();
+    else renderCard();
+  }
+
+  function finishSession() {
+    sessionEl.style.display = 'none';
+    resultsEl.style.display = 'block';
+    const { total, correct } = state.sessionStats;
+    const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+    document.getElementById('results-score').textContent = `${correct} / ${total}`;
+    document.getElementById('results-pct').textContent = total > 0 ? `${pct}% correct` : 'No cards graded';
+    const wrong = total - correct;
+    document.getElementById('results-breakdown').innerHTML = `
+      <div class="stat-block">
+        <div class="stat-value good">${correct}</div>
+        <div class="stat-label">Correct</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value bad">${wrong}</div>
+        <div class="stat-label">Missed</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value accent">${state.mode.toUpperCase()}</div>
+        <div class="stat-label">Mode</div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+})();
+</script>
+
+</body>
+</html>
