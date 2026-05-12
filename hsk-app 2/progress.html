@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f4ede1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>HSK 1 — Progress</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="topnav-mount"></div>
+
+<header class="page-header">
+  <h1>Progress <span class="cn">进度</span></h1>
+</header>
+
+<main>
+
+  <!-- Overview -->
+  <section class="progress-section">
+    <div class="progress-section-title">Overview</div>
+    <div class="results-breakdown" id="overview"></div>
+  </section>
+
+  <!-- Mode breakdown -->
+  <section class="progress-section">
+    <div class="progress-section-title">By mode</div>
+    <div class="results-breakdown" id="mode-breakdown"></div>
+  </section>
+
+  <!-- SRS deck -->
+  <section class="progress-section">
+    <div class="progress-section-title">Spaced repetition deck</div>
+    <div class="results-breakdown" id="srs-summary"></div>
+  </section>
+
+  <!-- Missed list -->
+  <section class="progress-section">
+    <div class="progress-section-title" id="missed-title">Words you've missed</div>
+    <div id="missed-container"></div>
+  </section>
+
+  <!-- Danger zone -->
+  <div class="danger-zone">
+    <p style="font-family:'Fraunces',serif;font-style:italic;color:var(--muted);margin-bottom:1rem;">
+      Clears wrong-list, SRS schedule, and statistics. Cannot be undone.
+    </p>
+    <button class="btn" id="reset-btn">Reset all progress</button>
+  </div>
+
+</main>
+
+<footer>HSK 1 · Progress</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7/dist/hanzi-writer.min.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  function render() {
+    const stats = storage.getStats();
+    const wrong = storage.getWrong();
+    const srs = storage.getSRS();
+
+    // Overview
+    const accuracyPct = stats.total > 0 ? Math.round((stats.correct / stats.total) * 100) : 0;
+    document.getElementById('overview').innerHTML = `
+      <div class="stat-block">
+        <div class="stat-value accent">${stats.total}</div>
+        <div class="stat-label">Answers</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value good">${accuracyPct}%</div>
+        <div class="stat-label">Accuracy</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value">${stats.sessions}</div>
+        <div class="stat-label">Sessions</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value accent">${stats.streakDays}</div>
+        <div class="stat-label">Current streak</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value">${stats.longestStreak}</div>
+        <div class="stat-label">Best streak</div>
+      </div>
+    `;
+
+    // Mode breakdown
+    const modes = ['flip', 'srs', 'mcq', 'quiz'];
+    const modeLabels = { flip: 'Flip', srs: 'SRS', mcq: 'Multi-choice', quiz: 'Quiz' };
+    document.getElementById('mode-breakdown').innerHTML = modes.map(m => {
+      const data = stats.perMode[m] || { total: 0, correct: 0 };
+      const pct = data.total > 0 ? Math.round((data.correct / data.total) * 100) : 0;
+      return `
+        <div class="stat-block">
+          <div class="stat-value">${data.correct} / ${data.total}</div>
+          <div class="stat-label">${modeLabels[m]} · ${data.total > 0 ? pct + '%' : '—'}</div>
+        </div>
+      `;
+    }).join('');
+
+    // SRS summary
+    const srsEntries = Object.entries(srs);
+    const now = Date.now();
+    let due = 0, scheduled = 0;
+    for (const [, c] of srsEntries) {
+      if (c.due <= now) due += 1;
+      else scheduled += 1;
+    }
+    document.getElementById('srs-summary').innerHTML = `
+      <div class="stat-block">
+        <div class="stat-value">${srsEntries.length}</div>
+        <div class="stat-label">In deck</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value accent">${due}</div>
+        <div class="stat-label">Due now</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value">${scheduled}</div>
+        <div class="stat-label">Scheduled</div>
+      </div>
+    `;
+
+    // Missed list (clickable -> modal)
+    const missedTitle = document.getElementById('missed-title');
+    const missedContainer = document.getElementById('missed-container');
+    missedTitle.textContent = `Words you've missed (${wrong.size})`;
+
+    if (wrong.size === 0) {
+      missedContainer.innerHTML = `<div class="empty-state">Nothing here yet — get something wrong and it'll show up.</div>`;
+    } else {
+      const wrongWords = allWords.filter(w => wrong.has(w.hanzi));
+      missedContainer.innerHTML = `
+        <div class="word-grid" id="missed-grid">
+          ${wrongWords.map(w => `
+            <div class="word" data-hanzi="${w.hanzi}" data-pinyin="${w.pinyin}" data-gloss="${w.gloss.replace(/"/g,'&quot;')}">
+              <div class="pinyin">${w.pinyin}</div>
+              <div class="hanzi">${w.hanzi}</div>
+              <div class="gloss">${escapeHtml(w.gloss)}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      document.getElementById('missed-grid').addEventListener('click', e => {
+        const card = e.target.closest('.word');
+        if (!card) return;
+        openModalForHanzi(card.dataset.hanzi, card.dataset.pinyin, card.dataset.gloss);
+      });
+    }
+  }
+
+  document.getElementById('reset-btn').addEventListener('click', () => {
+    if (confirm('Reset all progress? This cannot be undone.')) {
+      storage.reset();
+      render();
+    }
+  });
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+
+  render();
+})();
+</script>
+
+</body>
+</html>

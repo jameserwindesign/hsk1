@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#f4ede1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<title>HSK 1 — Quiz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="topnav-mount"></div>
+
+<header class="page-header">
+  <h1>Quiz <span class="cn">测验</span></h1>
+</header>
+
+<!-- ===== SETUP ===== -->
+<section class="setup-panel" id="setup">
+  <div class="setup-group">
+    <div class="setup-label">Length</div>
+    <div class="option-grid" data-group="length">
+      <button class="option-card selected" data-value="10">
+        <div class="option-title">10 questions</div>
+        <div class="option-desc">Quick check.</div>
+      </button>
+      <button class="option-card" data-value="20">
+        <div class="option-title">20 questions</div>
+        <div class="option-desc">Standard.</div>
+      </button>
+      <button class="option-card" data-value="50">
+        <div class="option-title">50 questions</div>
+        <div class="option-desc">Marathon.</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="setup-group">
+    <div class="setup-label">Direction</div>
+    <div class="option-grid" data-group="direction">
+      <button class="option-card selected" data-value="hanzi-en">
+        <div class="option-title">汉字 → meaning</div>
+        <div class="option-desc">Recognition.</div>
+      </button>
+      <button class="option-card" data-value="hanzi-py">
+        <div class="option-title">汉字 → pinyin</div>
+        <div class="option-desc">Pronunciation.</div>
+      </button>
+      <button class="option-card" data-value="en-hanzi">
+        <div class="option-title">meaning → 汉字</div>
+        <div class="option-desc">Recall.</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="setup-group">
+    <div class="setup-label">Pool</div>
+    <div class="option-grid" data-group="deck">
+      <button class="option-card selected" data-value="all">
+        <div class="option-title">All 300</div>
+        <div class="option-desc">Draw from the whole list.</div>
+      </button>
+      <button class="option-card" data-value="smart">
+        <div class="option-title">Smart</div>
+        <div class="option-desc">Only words you've missed before.</div>
+      </button>
+    </div>
+  </div>
+
+  <div class="setup-summary" id="setup-summary"></div>
+
+  <div class="setup-actions">
+    <button class="btn btn-primary" id="start-btn">Start quiz</button>
+  </div>
+</section>
+
+<!-- ===== SESSION ===== -->
+<section class="session" id="session" style="display:none">
+  <div class="session-bar">
+    <span>Q <span class="progress-text" id="progress-count">0</span> / <span id="progress-total">0</span></span>
+    <span><span id="running-score">0</span> correct</span>
+  </div>
+  <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+  <div id="card-mount"></div>
+  <div class="session-actions">
+    <button class="btn btn-ghost" id="end-session">End quiz</button>
+    <span class="meta" id="card-info"></span>
+  </div>
+</section>
+
+<!-- ===== RESULTS ===== -->
+<section class="results" id="results" style="display:none">
+  <div class="results-headline" id="results-headline">Quiz complete</div>
+  <div class="results-score" id="results-score"></div>
+  <div class="results-pct" id="results-pct"></div>
+  <div class="results-breakdown" id="results-breakdown"></div>
+  <div id="missed-list" style="margin: 2rem 0; text-align: left;"></div>
+  <div class="btn-row">
+    <button class="btn btn-primary" id="restart-btn">New quiz</button>
+    <a class="btn btn-ghost" href="flashcards.html">Drill missed words</a>
+  </div>
+</section>
+
+<footer>HSK 1 · Quiz</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/hanzi-writer@3.7/dist/hanzi-writer.min.js"></script>
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script>
+(function () {
+  const state = {
+    length: 10,
+    direction: 'hanzi-en',
+    deck: 'all',
+    questions: [],
+    idx: 0,
+    correctCount: 0,
+    missed: [], // array of {word, picked}
+    startTime: 0,
+  };
+
+  const setupEl = document.getElementById('setup');
+  const sessionEl = document.getElementById('session');
+  const resultsEl = document.getElementById('results');
+  const summary = document.getElementById('setup-summary');
+  const startBtn = document.getElementById('start-btn');
+  const cardMount = document.getElementById('card-mount');
+  const progressCount = document.getElementById('progress-count');
+  const progressTotal = document.getElementById('progress-total');
+  const progressFill = document.getElementById('progress-fill');
+  const runningScore = document.getElementById('running-score');
+  const cardInfo = document.getElementById('card-info');
+  const endBtn = document.getElementById('end-session');
+  const restartBtn = document.getElementById('restart-btn');
+
+  document.querySelectorAll('.option-grid').forEach(grid => {
+    const group = grid.dataset.group;
+    grid.addEventListener('click', e => {
+      const btn = e.target.closest('.option-card');
+      if (!btn) return;
+      grid.querySelectorAll('.option-card').forEach(b => b.classList.remove('selected'));
+      btn.classList.add('selected');
+      state[group] = group === 'length' ? parseInt(btn.dataset.value, 10) : btn.dataset.value;
+      onSetupChange();
+    });
+  });
+
+  function onSetupChange() {
+    const pool = state.deck === 'all' ? allWords.length : buildDeckSmart().length;
+    const dirLabels = {
+      'hanzi-en': '汉字 → meaning',
+      'hanzi-py': '汉字 → pinyin',
+      'en-hanzi': 'meaning → 汉字',
+    };
+    const N = Math.min(state.length, pool);
+    summary.innerHTML = `
+      <strong>${N}</strong> question${N === 1 ? '' : 's'} ·
+      <strong>${dirLabels[state.direction]}</strong> ·
+      pool of <strong>${pool}</strong>
+      ${pool < 4 ? '<br><span style="color:var(--vermillion)">Need at least 4 words in pool to build choices.</span>' : ''}
+    `;
+    startBtn.disabled = pool < 4;
+  }
+  onSetupChange();
+
+  startBtn.addEventListener('click', () => {
+    const pool = state.deck === 'all' ? buildDeckAll() : buildDeckSmart();
+    state.questions = pool.slice(0, Math.min(state.length, pool.length));
+    state.idx = 0;
+    state.correctCount = 0;
+    state.missed = [];
+    state.startTime = Date.now();
+
+    storage.startSession();
+    setupEl.style.display = 'none';
+    resultsEl.style.display = 'none';
+    sessionEl.style.display = 'block';
+    progressTotal.textContent = state.questions.length;
+    runningScore.textContent = '0';
+    renderQuestion();
+  });
+
+  endBtn.addEventListener('click', finishQuiz);
+  restartBtn.addEventListener('click', () => {
+    setupEl.style.display = 'block';
+    sessionEl.style.display = 'none';
+    resultsEl.style.display = 'none';
+    onSetupChange();
+  });
+
+  function currentQ() { return state.questions[state.idx]; }
+
+  function renderQuestion() {
+    progressCount.textContent = state.idx + 1;
+    progressFill.style.width = `${(state.idx / state.questions.length) * 100}%`;
+    cardInfo.textContent = '';
+
+    if (state.idx >= state.questions.length) { finishQuiz(); return; }
+
+    const w = currentQ();
+    const choices = buildChoices(w);
+    const correctIdx = choices.indexOf(w);
+
+    cardMount.innerHTML = `
+      <div class="card no-flip">
+        <div class="card-prompt-label">${promptLabel()}</div>
+        ${promptHtml(w)}
+      </div>
+      <div class="mcq-options" id="mcq-options">
+        ${choices.map((c, i) => `
+          <button class="mcq-option" data-idx="${i}">
+            <span class="mcq-letter">${String.fromCharCode(65 + i)}</span>
+            ${choiceText(c)}
+          </button>
+        `).join('')}
+      </div>
+    `;
+
+    document.getElementById('mcq-options').addEventListener('click', e => {
+      const btn = e.target.closest('.mcq-option');
+      if (!btn || btn.disabled) return;
+      const picked = parseInt(btn.dataset.idx, 10);
+      const correct = picked === correctIdx;
+      document.querySelectorAll('.mcq-option').forEach((b, i) => {
+        b.disabled = true;
+        if (i === correctIdx) b.classList.add('correct');
+        else if (i === picked) b.classList.add('wrong');
+      });
+      storage.recordAnswer('quiz', w.hanzi, correct);
+      if (correct) state.correctCount += 1;
+      else state.missed.push({ word: w, picked: choices[picked] });
+      runningScore.textContent = state.correctCount;
+      cardInfo.textContent = correct ? '✓ Correct' : `✗ Answer: ${answerString(w)}`;
+      setTimeout(() => {
+        state.idx += 1;
+        renderQuestion();
+      }, correct ? 700 : 1500);
+    });
+  }
+
+  function buildChoices(target) {
+    const pool = allWords.filter(w => w.hanzi !== target.hanzi);
+    const distractors = shuffle(pool).slice(0, 3);
+    return shuffle([target, ...distractors]);
+  }
+
+  function promptHtml(w) {
+    if (state.direction === 'en-hanzi') return `<div class="card-meaning">${escapeHtml(w.gloss)}</div>`;
+    return `<div class="card-hanzi">${w.hanzi}</div>`;
+  }
+  function choiceText(w) {
+    if (state.direction === 'hanzi-en') return `<span class="mcq-text-en">${escapeHtml(w.gloss)}</span>`;
+    if (state.direction === 'hanzi-py') return `<span class="mcq-text-py">${w.pinyin}</span>`;
+    return `<span class="mcq-text-cn">${w.hanzi}</span>`;
+  }
+  function answerString(w) {
+    if (state.direction === 'hanzi-en') return w.gloss;
+    if (state.direction === 'hanzi-py') return w.pinyin;
+    return w.hanzi;
+  }
+  function promptLabel() {
+    if (state.direction === 'en-hanzi') return 'meaning';
+    return '汉字';
+  }
+
+  function finishQuiz() {
+    sessionEl.style.display = 'none';
+    resultsEl.style.display = 'block';
+
+    const total = state.idx; // questions actually answered (so end-early works)
+    const correct = state.correctCount;
+    const missed = total - correct;
+    const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
+    const seconds = Math.round((Date.now() - state.startTime) / 1000);
+
+    document.getElementById('results-headline').textContent =
+      pct === 100 ? 'Flawless' :
+      pct >= 90  ? 'Excellent' :
+      pct >= 75  ? 'Solid' :
+      pct >= 50  ? 'Keep practicing' :
+                   'Drill time';
+
+    document.getElementById('results-score').textContent = `${correct} / ${total}`;
+    document.getElementById('results-pct').textContent = total > 0 ? `${pct}% correct · ${seconds}s` : 'No answers recorded';
+
+    document.getElementById('results-breakdown').innerHTML = `
+      <div class="stat-block">
+        <div class="stat-value good">${correct}</div>
+        <div class="stat-label">Correct</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value bad">${missed}</div>
+        <div class="stat-label">Missed</div>
+      </div>
+      <div class="stat-block">
+        <div class="stat-value accent">${total > 0 ? (seconds / total).toFixed(1) : '—'}s</div>
+        <div class="stat-label">Avg / Q</div>
+      </div>
+    `;
+
+    const missedList = document.getElementById('missed-list');
+    if (state.missed.length === 0) {
+      missedList.innerHTML = '';
+    } else {
+      missedList.innerHTML = `
+        <div class="progress-section-title">Missed (${state.missed.length})</div>
+        <div class="word-grid" id="missed-grid">
+          ${state.missed.map(m => `
+            <div class="word" data-hanzi="${m.word.hanzi}" data-pinyin="${m.word.pinyin}" data-gloss="${m.word.gloss.replace(/"/g,'&quot;')}">
+              <div class="pinyin">${m.word.pinyin}</div>
+              <div class="hanzi">${m.word.hanzi}</div>
+              <div class="gloss">${escapeHtml(m.word.gloss)}</div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+      document.getElementById('missed-grid').addEventListener('click', e => {
+        const card = e.target.closest('.word');
+        if (!card) return;
+        openModalForHanzi(card.dataset.hanzi, card.dataset.pinyin, card.dataset.gloss);
+      });
+    }
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
+  }
+})();
+</script>
+
+</body>
+</html>
